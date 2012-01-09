@@ -98,6 +98,11 @@ struct usb_ctrlrequest {
         __le16 wLength;
 } __attribute__ ((packed));
 
+static inline bool is_read_cr(struct usb_ctrlrequest *cr)
+{
+	return (cr->bRequestType & 0x80);
+}
+
 #include "registers.cc"
 
 unsigned char *get_data(struct usbmon_packet *hdr)
@@ -178,7 +183,7 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 	struct reg *reg1 = get_reg(cr->wIndex - 2);
 	struct reg *reg2 = get_reg(cr->wIndex + 2);
 
-	if (cr->bRequestType & 0x80) {
+	if (is_read_cr(cr)) {
 		// Read
 		assert(shdr->len_cap == 0);
 
@@ -256,7 +261,7 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 		const char *name = area ? area->name : "Unknown area";
 
 		// FIXME: len_cap == 0
-		if (cr->bRequestType & 0x80)
+		if (is_read_cr(cr))
 			// Read
 			printf("CTRL: READ %d BYTES FROM 0x%04x (%s)\n", hdr->len_cap, cr->wIndex, name);
 		else
@@ -266,12 +271,10 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 		return;
 	}
 
-
-	// TODO
-	//if (cr->wIndex == 0x101c)
+	if (cr->wIndex == 0x101c || cr->wIndex == 0x101e)
 		// BBP registers are threated specially
-	//	process_bbp_register_rw(cr, shdr, hdr);
-	//else 
+		process_bbp_register_rw(cr, shdr, hdr);
+	else 
 		process_register_rw(cr, shdr, hdr);
 }
 
