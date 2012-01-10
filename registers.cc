@@ -268,7 +268,7 @@ struct reg regs_array[] = {
 		{ 11,  0, "MAX_MPDU_LEN" },
 	}},
 
-	{ 0x101C, "BBP_CSR_CFG", 7, {
+	{ 0x101c, "BBP_CSR_CFG", 7, {
 		{ 31, 20, "Reserved" },
 		{ 19, 19, "BBP_RW_MODE" },
 		{ 18, 18, "BBP_PAR_DUR" },

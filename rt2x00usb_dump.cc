@@ -171,9 +171,104 @@ void print_reg(struct reg *reg, uint32_t val, bool read, Content content)
 	printf("]\n");
 }
 
-void process_bbp_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr, struct usbmon_packet *hdr)
-{
+enum SpecialRegState { CHECKING_STATUS, SET_ADDR_DATA, KICK_READ };
 
+struct special_reg {
+	const char *name;
+	uint16_t addr;
+	const uint32_t ADDR_MASK;
+	enum SpecialRegState state;
+	uint8_t cur_addr;
+	uint8_t cur_data;
+};
+
+struct special_reg reg_bbp = {
+	name: "BBP",
+	addr: 0x101c,
+	ADDR_MASK: 0x0000ff00,
+};
+
+struct special_reg reg_rf = {
+	name: "RF",
+	addr: 0x0500,
+	ADDR_MASK: 0x00003f00,
+};
+static inline void print_special_reg(struct special_reg *reg, bool read)
+{
+	const char *dir1 = read ? "<-" : "->";
+	const char *dir2 = read ? "[READ]" : "[WRITE]";
+
+	printf("0x%02x %s %s REG%u\t%s\n", reg->cur_data, dir1, reg->name, reg->cur_addr, dir2);
+}
+
+void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr, struct usbmon_packet *hdr, struct special_reg *reg)
+{
+	const uint32_t DATA_MASK = 0x000000ff;
+	const uint32_t ADDR_MASK = reg->ADDR_MASK;
+	const uint32_t RW_BIT	 = 0x00010000; // 0 - Write, 1 - Read
+	const uint32_t KICK_BIT	 = 0x00020000;
+
+	if (is_read_cr(cr)) {
+		// Read
+		assert(hdr->len_cap == 4);
+		uint32_t reg_val = get_reg_val(hdr);
+
+		if (reg->state == KICK_READ) {
+			bool busy = reg_val & KICK_BIT;
+			if (busy)
+				return;
+
+			assert(reg->cur_addr == ((reg_val & ADDR_MASK) >> 8));
+			reg->cur_data = reg_val & DATA_MASK;
+
+			print_special_reg(reg, true);
+
+			reg->state = CHECKING_STATUS;
+		} else
+			assert(reg->state == CHECKING_STATUS);
+	} else {
+		// Write
+		if (shdr->len_cap == 4) {
+			uint32_t reg_val = get_reg_val(shdr);
+
+			reg->cur_data = reg_val & DATA_MASK;
+			reg->cur_addr = (reg_val & ADDR_MASK) >> 8;
+
+			bool do_read = reg_val & RW_BIT;
+			bool do_kick = reg_val & KICK_BIT;
+
+			assert(do_kick == true);
+
+			if (do_read)
+				reg->state = KICK_READ;
+			else {
+				print_special_reg(reg, false);
+				reg->state = CHECKING_STATUS;
+			}
+		} else if (shdr->len_cap == 0) {
+			if (cr->wIndex == reg->addr) {
+				reg->cur_data = cr->wValue & DATA_MASK;
+				reg->cur_addr = (cr->wValue & ADDR_MASK) >> 8;
+
+				reg->state = SET_ADDR_DATA;
+			} else { 
+				assert(reg->state == SET_ADDR_DATA);
+
+				// UpperHalf (cr->wIndex == 0x101e)
+				bool do_read = cr->wValue & (RW_BIT >> 16);
+				bool do_kick = cr->wValue & (KICK_BIT >> 16);
+
+				assert(do_kick == true);
+
+				if (do_read == false) {
+					print_special_reg(reg, false);
+					reg->state = CHECKING_STATUS;
+				} else
+					reg->state = KICK_READ;
+			}
+		} else
+			assert(false);
+	}
 }
 
 void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr, struct usbmon_packet *hdr)
@@ -238,7 +333,6 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 				printf("0x%04x -> REG 0x%04x\n", cr->wValue, cr->wIndex);
 		}
 	}
-
 }
 
 void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hdr)
@@ -271,11 +365,16 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 		return;
 	}
 
-	if (cr->wIndex == 0x101c || cr->wIndex == 0x101e)
-		// BBP registers are threated specially
-		process_bbp_register_rw(cr, shdr, hdr);
-	else 
+	// BBP and RF registers are indirectly addressed, print only valuable data
+	if (cr->wIndex == reg_bbp.addr || cr->wIndex == reg_bbp.addr + 2)
+		process_special_register_rw(cr, shdr, hdr, &reg_bbp);
+	else if (cr->wIndex == reg_rf.addr || cr->wIndex == reg_rf.addr + 2)
+		process_special_register_rw(cr, shdr, hdr, &reg_rf);
+	else
 		process_register_rw(cr, shdr, hdr);
+
+	// Seems when asserion fail lines are not printed in order, flush should fix that
+	fflush(stdout);
 }
 
 void print_rxinfo(unsigned char *buf, int len)
