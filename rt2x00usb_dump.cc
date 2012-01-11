@@ -372,9 +372,10 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 			print_data(hdr);
 		} else {
 			// Write
-			if (shdr->len_cap == 0)
-				printf("CTRL: WRITE VALUE 0x%02x LENGTH 0x%02x TO 0x%04x (%s)\n", cr->wValue, cr->wLength, cr->wIndex, name);
-			else {
+			if (shdr->len_cap == 0) {
+				assert(cr->wLength == 0);
+				printf("CTRL: WRITE VALUE 0x%04x TO 0x%04x (%s)\n", cr->wValue, cr->wIndex, name);
+			} else {
 				printf("CTRL: WRITE %d BYTES TO 0x%04x (%s)\n", shdr->len_cap, cr->wIndex, name);
 				print_data(shdr);
 			}
