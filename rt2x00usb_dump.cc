@@ -110,6 +110,16 @@ unsigned char *get_data(struct usbmon_packet *hdr)
 	return reinterpret_cast<unsigned char *>(hdr) + sizeof(struct usbmon_packet);
 }
 
+void print_data(struct usbmon_packet *hdr)
+{
+	unsigned char *data = get_data(hdr);
+
+	printf(" [DATA:");
+	for (unsigned int i = 0; i < hdr->len_cap; i++)
+		printf(" %02x", data[i]);
+	printf("]\n");
+}
+
 uint32_t decode_reg_val(unsigned char *buf)
 {
 	// Little endian
@@ -148,25 +158,25 @@ enum Content { Full, UpperHalf, LowerHalf };
 void print_reg(struct reg *reg, uint32_t val, bool read, Content content)
 {
 	const char *dir1 = read ? "<-" : "->";
-	const char *dir2 = read ? "[READ :" : "[WRITE:";
 	uint32_t include;
 
 	switch (content) {
 	case Full:
-		printf("0x%08x %s %s\t %s", val, dir1, reg->name, dir2);
+		printf("0x%08x %s %s\n", val, dir1, reg->name);
 		include = 0xffffffff;
 		break;
 	case UpperHalf:
-		printf("0x%04x %s %s (16 MSB)\t %s", val, dir1, reg->name, dir2);
+		printf("0x%04x %s %s (16 MSB)\n", val, dir1, reg->name);
 		include = 0xffff0000;
 		val <<= 16; // Tweak to do not break fields matching
 		break;
 	case LowerHalf:
-		printf("0x%04x %s %s (16 LSB)\t %s", val, dir1, reg->name, dir2);
+		printf("0x%04x %s %s (16 LSB)\n", val, dir1, reg->name);
 		include = 0x0000ffff;
 		break;
-	}	
+	}
 
+	printf(" %s", read ? "[READ:" : "[WRITE:");
 	print_reg_content(reg, val, include);
 	printf("]\n");
 }
@@ -284,6 +294,7 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 
 		if (hdr->len_cap != 4) {
 			printf("CTRL: READ %d BYTES FROM REGISTER 0x04%x\n", hdr->len_cap, cr->wIndex);
+			print_data(hdr);
 			return; 
 		}
 	
@@ -306,6 +317,7 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 		
 		if (shdr->len_cap != 4 && shdr->len_cap != 0) {
 			printf("CTRL: WRITE %d BYTES TO REGISTER 0x%04x\n", shdr->len_cap, cr->wIndex);
+			print_data(shdr);
 			return;
 		}
 
@@ -354,13 +366,19 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 		struct area *area = get_area(cr->wIndex);
 		const char *name = area ? area->name : "Unknown area";
 
-		// FIXME: len_cap == 0
-		if (is_read_cr(cr))
+		if (is_read_cr(cr)) {
 			// Read
 			printf("CTRL: READ %d BYTES FROM 0x%04x (%s)\n", hdr->len_cap, cr->wIndex, name);
-		else
+			print_data(hdr);
+		} else {
 			// Write
-			printf("CTRL: WRITE %d BYTES TO 0x%04x (%s)\n", shdr->len_cap, cr->wIndex, name);
+			if (shdr->len_cap == 0)
+				printf("CTRL: WRITE VALUE 0x%02x LENGTH 0x%02x TO 0x%04x (%s)\n", cr->wValue, cr->wLength, cr->wIndex, name);
+			else {
+				printf("CTRL: WRITE %d BYTES TO 0x%04x (%s)\n", shdr->len_cap, cr->wIndex, name);
+				print_data(shdr);
+			}
+		}
 
 		return;
 	}
