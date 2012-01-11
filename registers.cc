@@ -14,7 +14,8 @@ struct area {
 struct area areas_array[] =  {
 	{ 0x0000, 0x17ff, "MAC REGISTERS" },
 	{ 0x1800, 0x1fff, "WCID search table" },
-	{ 0x2000, 0x3fff, "Unknown 1" },
+	{ 0x2000, 0x2fff, "Unknown 1" },
+	{ 0x3000, 0x3fff, "Firmware" },
 	{ 0x4000, 0x5fff, "Security table/CIS/Beacon/NULL frame" },
 	{ 0x6000, 0x67ff, "IV/EIV table" },
 	{ 0x6800, 0x6bff, "WCID attribute table" },
