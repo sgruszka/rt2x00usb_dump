@@ -8,7 +8,7 @@ struct area {
 	uint16_t begin;
 	uint16_t end;
 	const char *name;
-	void (*print_data)(uint16_t offset);
+	//void (*print_data)(uint16_t offset);
 };
 
 struct area areas_array[] =  {
@@ -104,7 +104,7 @@ struct reg regs_array[] = {
 	{ 0x02A4, "US_CYC_CNT", 6, {
 	  	{ 31, 25, "Reserved" },
 	  	{ 24, 24, "TEST_EN" },
-	  	{ 23, 23, "TEST_SEL" },
+	  	{ 23, 16, "TEST_SEL" },
 	  	{ 15,  9, "Reserved" },
 	  	{  8,  8, "BT_MODE_EN" },
 	  	{  7,  0, "US_CYC_CNT" },
@@ -128,8 +128,6 @@ struct reg regs_array[] = {
 		{  2,  2, "MAC_RESET" },
 		{  1,  1, "DMA_RESET" },
 		{  0,  0, "MCU_RESET" },
-
-
 	}},
 
 	{ 0x0404, "HOST_CMD", 1, {
@@ -220,7 +218,7 @@ struct reg regs_array[] = {
 		
 	}},
 	
-	{ 0x1004, "MAC_SYS_CTRL", 8, {
+	{ 0x1004, "MAC_SYS_CTRL", 9, {
 		{ 31,  8, "Reserved" },
 		{  7,  7, "RX_TS_EN" },
 		{  6,  6, "WLAN_HALT_EN" },
@@ -261,7 +259,7 @@ struct reg regs_array[] = {
 		{  7,  0, "BSSID_4" },
 	}},
 
-	{ 0x1018, "MAX_LEN_CFG", 4, {
+	{ 0x1018, "MAX_LEN_CFG", 5, {
 		{ 31, 20, "Reserved" },
 		{ 19, 16, "MIN_MPDU_LEN" },
 		{ 15, 14, "Reserved" },
@@ -298,16 +296,19 @@ struct reg regs_array[] = {
 		{ 23,  0, "RF_REG_2" },
 	}},
 	
-	{ 0x102C, "LED_CFG", 7, {
+	{ 0x102C, "LED_CFG", 9, {
 		{ 31, 31, "Reserved" },
 		{ 30, 30, "LED_POL" },
-		{ 29, 28, "Y_LED_MODE" }, { 27, 26, "G_LED_MODE" }, { 25, 24, "R_LED_MODE" },
-		{ 23, 22, "SLOW_BLK_TIME" },
+		{ 29, 28, "Y_LED_MODE" },
+		{ 27, 26, "G_LED_MODE" },
+		{ 25, 24, "R_LED_MODE" },
+		{ 23, 22, "Reserved" },
+		{ 21, 16, "SLOW_BLK_TIME" },
 		{ 15,  8, "LED_OFF_TIME" },
 		{  7,  0, "LED_ON_TIME" },
 	}},
 
-	{ 0x1100, "XIFS_TIME_CFG", 7, {
+	{ 0x1100, "XIFS_TIME_CFG", 6, {
 		{ 31, 30, "Reserved" },
 		{ 29, 29, "BB_RXEND_EN" },
 		{ 28, 20, "EIFS_TIME" },
@@ -324,7 +325,7 @@ struct reg regs_array[] = {
 
 	{ 0x1108, "NAV_TIME_CFG", 4, {
 		{ 31, 31, "NAV_UPD" },
-		{ 31, 16, "NAV_UPD_VAL" },
+		{ 30, 16, "NAV_UPD_VAL" },
 		{ 15, 15, "NAV_CLR_EN" },
 		{ 14,  0, "NAV_TIMER" },
 	}},
@@ -751,3 +752,30 @@ struct reg *get_reg(uint16_t offset)
 	return NULL;
 }
 
+void regs_array_self_test(void)
+{
+	const int n = ARRAY_SIZE(regs_array);
+	const bool print = false;
+
+	for (int i = 0; i < n; i++) {
+		if (print)
+			printf("%s:\n", regs_array[i].name);
+		int nf  = regs_array[i].n_fields;
+		if (nf == 0)
+			continue;
+
+		int prev_first = 32;
+		for (int j = 0; j < nf; j++) {
+			struct field *f = &regs_array[i].fields[j];
+
+			assert(f->name != NULL);
+			if (print) {
+				printf("\t%s:\n", regs_array[i].fields[j].name);
+				fflush(stdout);
+			}
+			assert(f->last + 1 == prev_first);
+			prev_first = f->first;
+		}
+		assert(prev_first == 0);
+	}
+}

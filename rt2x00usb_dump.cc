@@ -650,6 +650,8 @@ int main(int argc, char **argv)
 	int opt, bus, address;
 	char *device;
 
+	regs_array_self_test();
+
 	// FIXME: device autorecognize
 	device = NULL;
 	while ((opt = getopt(argc, argv, "d:")) != -1) {
