@@ -187,6 +187,9 @@ struct special_reg {
 	const char *name;
 	uint16_t addr;
 	const uint32_t ADDR_MASK;
+	bool write_is_1; // RW_BIT meaning:
+			 // 	true:  1 is write, 0 is read.
+			 // 	false: 0 is write, 1 is read.
 	enum SpecialRegState state;
 	uint8_t cur_addr;
 	uint8_t cur_data;
@@ -196,13 +199,16 @@ struct special_reg reg_bbp = {
 	name: "BBP",
 	addr: 0x101c,
 	ADDR_MASK: 0x0000ff00,
+	write_is_1: false,
 };
 
 struct special_reg reg_rf = {
 	name: "RF",
 	addr: 0x0500,
 	ADDR_MASK: 0x00003f00,
+	write_is_1: true,
 };
+
 static inline void print_special_reg(struct special_reg *reg, bool read)
 {
 	const char *dir1 = read ? "<-" : "->";
@@ -245,6 +251,8 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 			reg->cur_addr = (reg_val & ADDR_MASK) >> 8;
 
 			bool do_read = reg_val & RW_BIT;
+			if (reg->write_is_1)
+				do_read = !do_read;
 			bool do_kick = reg_val & KICK_BIT;
 
 			assert(do_kick == true);
@@ -266,6 +274,8 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 
 				// UpperHalf (cr->wIndex == 0x101e)
 				bool do_read = cr->wValue & (RW_BIT >> 16);
+				if (reg->write_is_1)
+					do_read = !do_read;
 				bool do_kick = cr->wValue & (KICK_BIT >> 16);
 
 				assert(do_kick == true);
