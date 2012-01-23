@@ -69,11 +69,41 @@ struct reg regs_array[] = {
 
 	{ 0x020C, "WPDMA_RST_IDX", 0, { } },
 	{ 0x0210, "DELAY_INT_CFG", 0, { } },
-	{ 0x0214, "WMM_AIFSN_CFG", 0, { } },
-	{ 0x0218, "WMM_CWMIN_CFG", 0, { } },
-	{ 0x021C, "WMM_CWMAX_CFG", 0, { } },
-	{ 0x0220, "WMM_TXOP0_CFG", 0, { } },
-	{ 0x0224, "WMM_TXOP1_CFG", 0, { } },
+
+	{ 0x0214, "WMM_AIFSN_CFG", 5, {
+		{ 31, 16, "Reserved" },
+		{ 15, 12, "AIFSN3" },
+		{ 11,  8, "AIFSN2" },
+		{  7,  4, "AIFSN1" },
+		{  3,  0, "AIFSN0" },
+	}},
+
+	{ 0x0218, "WMM_CWMIN_CFG", 5, {
+		{ 31, 16, "Reserced" },
+		{ 15, 12, "CW_MIN3" },
+		{ 11,  8, "CW_MIN2" },
+		{  7,  4, "CW_MIN1" }, 
+		{  3,  0, "CW_MIN0" },
+	}},
+
+	{ 0x021C, "WMM_CWMAX_CFG", 5, {
+		{ 31, 16, "Reserced" },
+		{ 15, 12, "CW_MAX3" },
+		{ 11,  8, "CW_MAX2" },
+		{  7,  4, "CW_MAX1" }, 
+		{  3,  0, "CW_MAX0" },
+	}},
+
+	{ 0x0220, "WMM_TXOP0_CFG", 2, {
+		{ 31, 16, "TXOP1" },
+		{ 15,  0, "TXOP0" },
+	}},
+
+	{ 0x0224, "WMM_TXOP1_CFG", 2, {
+		{ 31, 16, "TXOP3" },
+		{ 15,  0, "TXOP2" },
+	}},
+
 	{ 0x0228, "GPIO_CTRL", 0, { } },
 	{ 0x022C, "MCU_CMD_REG", 0, { } },
 	{ 0x0230, "TX_BASE_PTR0", 0, { } },
@@ -389,9 +419,38 @@ struct reg regs_array[] = {
 		{  7,  0, "WAKEUP_LEAD_TIME" },
 	}},
 
-	{ 0x1300,"EDCA_AC0_CFG", 0, { } },
-	{ 0x1304,"EDCA_AC1_CFG", 0, { } },
-	{ 0x1308,"EDCA_AC2_CFG", 0, { } },
+	{ 0x1300,"EDCA_AC0_CFG", 5, {
+		{ 31, 20, "Reserved" },
+		{ 19, 16, "AC0_CWMAX" },
+		{ 15, 12, "AC0_CWMIN" },
+		{ 11,  8, "AC0_AIFS" },
+		{  7,  0, "AC0_TXOP" },
+	}},
+
+	{ 0x1304,"EDCA_AC1_CFG", 5, {
+		{ 31, 20, "Reserved" },
+		{ 19, 16, "AC1_CWMAX" },
+		{ 15, 12, "AC1_CWMIN" },
+		{ 11,  8, "AC1_AIFS" },
+		{  7,  0, "AC1_TXOP" },
+	}},
+
+	{ 0x1308,"EDCA_AC2_CFG", 5, {
+		{ 31, 20, "Reserved" },
+		{ 19, 16, "AC2_CWMAX" },
+		{ 15, 12, "AC2_CWMIN" },
+		{ 11,  8, "AC2_AIFS" },
+		{  7,  0, "AC2_TXOP" },
+	}},
+
+	{ 0x130c,"EDCA_AC3_CFG", 5, { 
+		{ 31, 20, "Reserved" },
+		{ 19, 16, "AC3_CWMAX" },
+		{ 15, 12, "AC3_CWMIN" },
+		{ 11,  8, "AC3_AIFS" },
+		{  7,  0, "AC3_TXOP" },
+	}},
+
 	{ 0x1310,"EDCA_TID_AC_MAP", 0, { } },
 
 	{ 0x1314,"TX_PWR_CFG_0", 4, {
