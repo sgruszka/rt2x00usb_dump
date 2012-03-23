@@ -530,14 +530,74 @@ struct reg regs_array[] = {
 	{ 0x1358,"HT_FBK_CFG1", 0, { } },
 	{ 0x135C,"LG_FBK_CFG0", 0, { } },
 	{ 0x1360,"LG_FBK_CFG1", 0, { } },
-	{ 0x1364,"CCK_PROT_CFG", 0, { } },
-	{ 0x1368,"OFDM_PROT_CFG", 0, { } },
-	{ 0x136C,"MM20_PROT_CFG", 0, { } },
-	{ 0x1370,"MM40_PROT_CFG", 0, { } },
-	{ 0x1374,"GF20_PROT_CFG", 0, { } },
-	{ 0x1378,"GF40_PROT_CFG", 0, { } },
-	{ 0x137C,"EXP_CTS_TIME", 0, { } },
-	{ 0x1380,"EXP_ACK_TIME", 0, { } },
+
+	{ 0x1364,"CCK_PROT_CFG", 6, {
+		{ 31, 27, "Reserved" },
+		{ 26, 26, "CCK_RTSTH_EN" },
+		{ 25, 20, "CCK_TXOP_ALLOW" },
+		{ 19, 18, "CCK_PROT_NAV" },
+		{ 17, 16, "CCK_PROT_CTRL" },
+		{ 15,  0, "CCK_PROT_RATE" },
+	}},
+
+	{ 0x1368,"OFDM_PROT_CFG", 6, {
+		{ 31, 27, "Reserved" },
+		{ 26, 26, "OFDM_RTSTH_EN" },
+		{ 25, 20, "OFDM_PROT_TXOP" },
+		{ 19, 18, "OFDM_PROT_NAV" },
+		{ 17, 16, "OFDM_PROT_CTRL" },
+		{ 15,  0, "OFDM_PROT_RATE" },
+	}},
+
+	{ 0x136C,"MM20_PROT_CFG", 6, {
+		{ 31, 27, "Reserved" },
+		{ 26, 26, "MM20_RTSTH_EN" },
+		{ 25, 20, "MM20_PROT_TXOP" },
+		{ 19, 18, "MM20_PROT_NAV" },
+		{ 17, 16, "MM20_PROT_CTRL" },
+		{ 15,  0, "MM20_PROT_RATE" },
+	}},
+
+	{ 0x1370,"MM40_PROT_CFG", 6, {
+		{ 31, 27, "Reserved" },
+		{ 26, 26, "MM40_RTSTH_EN" },
+		{ 25, 20, "MM40_PROT_TXOP" },
+		{ 19, 18, "MM40_PROT_NAV" },
+		{ 17, 16, "MM40_PROT_CTRL" },
+		{ 15,  0, "MM40_PROT_RATE" },
+	}},
+
+	{ 0x1374,"GF20_PROT_CFG", 6, {
+		{ 31, 27, "Reserved" },
+		{ 26, 26, "GF20_RTSTH_EN" },
+		{ 25, 20, "GF20_PROT_TXOP" },
+		{ 19, 18, "GF20_PROT_NAV" },
+		{ 17, 16, "GF20_PROT_CTRL" },
+		{ 15,  0, "GF20_PROT_RATE" },
+	}},
+
+	{ 0x1378,"GF40_PROT_CFG", 6, {
+		{ 31, 27, "Reserved" },
+		{ 26, 26, "GF40_RTSTH_EN" },
+		{ 25, 20, "GF40_PROT_TXOP" },
+		{ 19, 18, "GF40_PROT_NAV" },
+		{ 17, 16, "GF40_PROT_CTRL" },
+		{ 15,  0, "GF40_PROT_RATE" },
+	}},
+
+	{ 0x137C,"EXP_CTS_TIME", 4, {
+		{ 31, 31, "Reserved" },
+		{ 30, 16, "EXP_OFDM_CTS_TIME" },
+		{ 15, 15, "Reserved" },
+		{ 14,  0, "EXP_CCK_CTS_TIME" },
+	}},
+
+	{ 0x1380,"EXP_ACK_TIME", 4, {
+		{ 31, 31, "Reserved" },
+		{ 30, 16, "EXP_OFDM_ACK_TIME" },
+		{ 15, 15, "Reserved" },
+		{ 14,  0, "EXP_CCK_ACK_TIME" },
+	}},
 
 	{ 0x1400,"RX_FILTR_CFG", 18, {
 		{ 31, 17, "Reserved" },
