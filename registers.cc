@@ -523,9 +523,33 @@ struct reg regs_array[] = {
 	{ 0x1334,"TX_SW_CFG1", 0, { } },
 	{ 0x1338,"TX_SW_CFG2", 0, { } },
 	{ 0x133C,"TXOP_THRES_CFG", 0, { } },
-	{ 0x1344,"TX_RTS_CFG", 0, { } },
-	{ 0x1348,"TX_TIMEOUT_CFG", 0, { } },
-	{ 0x134C,"TX_RTY_CFG", 0, { } },
+	{ 0x1340,"TXOP_CTRL_CFG", 0, { } },
+
+	{ 0x1344,"TX_RTS_CFG", 4, {
+		{ 31, 25, "Reserved" },
+		{ 24, 24, "RTS_FBK_EN" },
+		{ 23,  8, "RTS_THRES" },
+		{  7,  0, "RTS_RTY_LIMIT"},
+	}},
+
+	{ 0x1348,"TX_TIMEOUT_CFG", 5, {
+		{ 31, 24, "Reserved" },
+		{ 23, 16, "TXOP_TIMEOUT" },
+		{ 15,  8, "RX_ACK_TIMEOUT" },
+		{  7,  4, "MPDU_LIFE_TIME" },
+		{  3,  0, "Reserved" },
+	}},
+
+	{ 0x134C,"TX_RTY_CFG", 7, {
+		{ 31, 31, "Reserved" },
+		{ 30, 30, "TX_AUTOFB_EN" },
+		{ 29, 29, "AGG_RTY_MODE" },
+		{ 28, 28, "NAG_RTY_MODE" },
+		{ 27, 16, "LONG_RTY_THRES" },
+		{ 15,  8, "LONG_RTY_LIMIT" },
+		{  7,  0, "SHORT_RTY_LIMIT" },
+	}},
+
 	{ 0x1354,"HT_FBK_CFG0", 0, { } },
 	{ 0x1358,"HT_FBK_CFG1", 0, { } },
 	{ 0x135C,"LG_FBK_CFG0", 0, { } },
