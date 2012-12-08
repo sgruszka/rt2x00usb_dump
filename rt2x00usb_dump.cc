@@ -234,7 +234,12 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 			if (busy)
 				return;
 
+#if 0
 			assert(reg->cur_addr == ((reg_val & ADDR_MASK) >> 8));
+#else
+			if (reg->cur_addr != ((reg_val & ADDR_MASK) >> 8))
+				printf("WARN cur_addr %02x addr %02x reg_val %08x\n", reg->cur_addr, (reg_val & ADDR_MASK) >> 8, reg_val);
+#endif
 			reg->cur_data = reg_val & DATA_MASK;
 
 			print_special_reg(reg, true);
@@ -270,7 +275,14 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 
 				reg->state = SET_ADDR_DATA;
 			} else { 
+#if 0
 				assert(reg->state == SET_ADDR_DATA);
+#else
+				if (reg->state != SET_ADDR_DATA) {
+					reg->state = CHECKING_STATUS;
+					return;
+				}
+#endif
 
 				// UpperHalf (cr->wIndex == 0x101e)
 				bool do_read = cr->wValue & (RW_BIT >> 16);
@@ -508,7 +520,12 @@ void process_packet(struct usbmon_packet *hdr)
 	struct usbmon_packet *shdr = reinterpret_cast<struct usbmon_packet *>(buf);
 
 	assert(shdr->id == hdr->id);
+#if 0
 	assert(shdr->epnum == hdr->epnum);
+#else
+	if (shdr->epnum != hdr->epnum)
+		printf("WARN EP missmash shdr->epnum %02x hdr->epnum %02x\n", shdr->epnum, hdr->epnum);
+#endif
 	assert(shdr->xfer_type == hdr->xfer_type);
 
 	if (shdr->xfer_type == 2)
