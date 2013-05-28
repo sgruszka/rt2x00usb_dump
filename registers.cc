@@ -245,9 +245,8 @@ struct reg regs_array[] = {
 	{ 0x1000, "ASIC_VER_ID", 2, {
 		{ 31, 16, "VER_ID" },
 		{ 15,  0, "REV_ID" },
-		
 	}},
-	
+
 	{ 0x1004, "MAC_SYS_CTRL", 9, {
 		{ 31,  8, "Reserved" },
 		{  7,  7, "RX_TS_EN" },
@@ -764,6 +763,16 @@ struct reg regs_array[] = {
 	}},
 
 	{ 0x1740, "MPDU_DENSITY_CNT", 0, { } },
+
+	{ 0x7028, "H2M_BBP_AGENT", 7, {
+		{ 31, 20, "Reserved" },
+		{ 19, 19, "MODE" },
+		{ 18, 18, "PAR_DUR" },
+		{ 17, 17, "BUSY" },
+		{ 16, 16, "READ" },
+		{ 15,  8, "ADDR" },
+		{  7,  0, "DATA" },
+	}},
 };
 
 // Not true registers, included in usb data
