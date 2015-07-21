@@ -120,101 +120,11 @@ void print_data(struct usbmon_packet *hdr)
 	printf("]\n");
 }
 
-uint32_t decode_reg_val(unsigned char *buf)
-{
-	// Little endian
-	return buf[3] << 24 | buf[2] << 16 | buf [1] << 8 | buf[0];
-}
-
 uint32_t get_reg_val(struct usbmon_packet *hdr, int nr = 0)
 {
 	unsigned char *buf = get_data(hdr);
 	buf += nr * sizeof(uint32_t);
 	return decode_reg_val(buf);
-}
-
-void print_reg_content(struct reg *reg, uint32_t val, int32_t include = 0xffffffff)
-{
-	for (int i = reg->n_fields - 1; i >= 0; i--) {
-		struct field *f = &reg->fields[i];
-		uint32_t mask = (0xffffffff << f->first) & (0xffffffff >> (31 - f->last));
-
-		if (mask & include)
-			printf(" %s: 0x%x", f->name, (val & mask) >> f->first);
-	}	
-}
-
-void print_buf_reg(struct reg *reg, unsigned char *buf)
-{
-	uint32_t val = decode_reg_val(buf);
-
-	printf("\t[%s:", reg->name);
-	print_reg_content(reg, val);
-	printf("]\n");
-}
-
-enum Content { Full, UpperHalf, LowerHalf };
-
-void print_reg(struct reg *reg, uint32_t val, bool read, Content content)
-{
-	const char *dir1 = read ? "<-" : "->";
-	uint32_t include;
-
-	switch (content) {
-	case Full:
-		printf("0x%08x %s %s\n", val, dir1, reg->name);
-		include = 0xffffffff;
-		break;
-	case UpperHalf:
-		printf("0x%04x %s %s (16 MSB)\n", val, dir1, reg->name);
-		include = 0xffff0000;
-		val <<= 16; // Tweak to do not break fields matching
-		break;
-	case LowerHalf:
-		printf("0x%04x %s %s (16 LSB)\n", val, dir1, reg->name);
-		include = 0x0000ffff;
-		break;
-	}
-
-	printf(" %s", read ? "[READ:" : "[WRITE:");
-	print_reg_content(reg, val, include);
-	printf("]\n");
-}
-
-enum SpecialRegState { CHECKING_STATUS = 0, SET_ADDR_DATA, KICK_READ };
-
-struct special_reg {
-	const char *name;
-	uint16_t addr;
-	const uint32_t ADDR_MASK;
-	bool write_is_1; // RW_BIT meaning:
-			 // 	true:  1 is write, 0 is read.
-			 // 	false: 0 is write, 1 is read.
-	enum SpecialRegState state;
-	uint8_t cur_addr;
-	uint8_t cur_data;
-};
-
-struct special_reg reg_bbp = {
-	name: "BBP",
-	addr: 0x101c,
-	ADDR_MASK: 0x0000ff00,
-	write_is_1: false,
-};
-
-struct special_reg reg_rf = {
-	name: "RF",
-	addr: 0x0500,
-	ADDR_MASK: 0x00003f00,
-	write_is_1: true,
-};
-
-static inline void print_special_reg(struct special_reg *reg, bool read)
-{
-	const char *dir1 = read ? "<-" : "->";
-	const char *dir2 = read ? "[READ]" : "[WRITE]";
-
-	printf("0x%02x %s %s REG%u\t%s\n", reg->cur_data, dir1, reg->name, reg->cur_addr, dir2);
 }
 
 void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr, struct usbmon_packet *hdr, struct special_reg *reg)
