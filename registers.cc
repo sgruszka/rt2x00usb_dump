@@ -830,15 +830,15 @@ struct reg rxwi_w0 = {
 };
 
 struct reg rxwi_w1 = {
-	0, "RXWI_W1", 7, {
+	0, "RXWI_W1", 8, {
 		{ 31, 30, "PHYMODE" },
 		{ 29, 27, "Reserved" },
 		{ 26, 25, "STBC" },
 		{ 24, 24, "SHORT_GI" },
 		{ 23, 23, "BW" },
 		{ 22, 16, "MCS" },
-		{ 15,  3, "SEQUENCE" },
-		{  2,  0, "FRAG" }, 
+		{ 15,  4, "SEQUENCE" },
+		{  3,  0, "FRAG" }, 
 	},
 };
 
