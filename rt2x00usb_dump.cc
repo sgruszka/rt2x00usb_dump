@@ -184,7 +184,7 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 				reg->cur_addr = (cr->wValue & ADDR_MASK) >> 8;
 
 				reg->state = SET_ADDR_DATA;
-			} else { 
+			} else {
 #if 0
 				assert(reg->state == SET_ADDR_DATA);
 #else
@@ -227,9 +227,9 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 		if (hdr->len_cap != 4) {
 			printf("CTRL: READ %d BYTES FROM REGISTER 0x04%x\n", hdr->len_cap, cr->wIndex);
 			print_data(hdr);
-			return; 
+			return;
 		}
-	
+
 		uint32_t reg_val = get_reg_val(hdr);
 
 		if (reg)
@@ -246,7 +246,7 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 	} else {
 		// Write
 		assert(hdr->len_cap == 0);
-		
+
 		if (shdr->len_cap != 4 && shdr->len_cap != 0) {
 			printf("CTRL: WRITE %d BYTES TO REGISTER 0x%04x\n", shdr->len_cap, cr->wIndex);
 			print_data(shdr);
@@ -273,7 +273,7 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 				print_reg(reg, cr->wValue, false, LowerHalf);
 			else if (reg1)
 				print_reg(reg1, cr->wValue, false, UpperHalf);
-			else 
+			else
 				printf("0x%04x -> REG 0x%04x\n", cr->wValue, cr->wIndex);
 		}
 	}
@@ -288,7 +288,7 @@ static bool process_mcu_request(struct usb_ctrlrequest *cr, struct usbmon_packet
 	static int state = 0;
 	static uint8_t command;
 	static uint8_t owner;
-	static uint8_t token; 
+	static uint8_t token;
 	static uint8_t arg0;
 	static uint8_t arg1;
 
@@ -298,7 +298,7 @@ static bool process_mcu_request(struct usb_ctrlrequest *cr, struct usbmon_packet
 		if (cr->wIndex == H2M_MAILBOX_CSR) {
 			if (is_read_cr(cr)) {
 				assert(hdr->len_cap == 4);
-			
+
 				uint32_t reg_val = get_reg_val(hdr);
 
 				if (!(reg_val & OWNER_BIT)) // not busy
@@ -306,7 +306,7 @@ static bool process_mcu_request(struct usb_ctrlrequest *cr, struct usbmon_packet
 			} else {
 				// For some MCU command driver skip "check busy" part
 				state = 1;
-				goto state_1; 
+				goto state_1;
 			}
 		} else {
 			return false;
@@ -358,7 +358,7 @@ state_1:
 			command = cr->wValue & 0xff;
 			state = 4;
 		}
-		break;	
+		break;
 	case 4:
 		if (cr->wIndex != HOST_CMD + 2)
 			goto stop_processing;
@@ -394,7 +394,7 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 		// Check busy or not H2M_BBP_AGENT processing
 		if (is_read_cr(cr) && cr->wIndex == H2M_BBP_AGENT) {
 			assert(hdr->len_cap == 4);
-			
+
 			uint32_t reg_val = get_reg_val(hdr);
 
 			if (!(reg_val & KICK_BIT)) // not busy
@@ -412,7 +412,7 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 		assert(cr->wIndex == 0x7028);
 		cur_addr = (cr->wValue & 0xff00) >> 8;
 		cur_data = cr->wValue & 0x00ff;
-		state = 2;	
+		state = 2;
 		break;
 	case 2:
 		if (cr->wIndex != 0x702a)
@@ -436,8 +436,8 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 #endif
 		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
 			break;
-	
-		// End of MCU processing 
+
+		// End of MCU processing
 		if (cr->wIndex == 0x0406 && cr->wValue == 0x0000) {
 			if (is_read)
 				state = 4;
@@ -452,7 +452,7 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 	case 4:
 		if (cr->wIndex != H2M_BBP_AGENT)
 			return false;
-			
+
 		assert(is_read_cr(cr));
 		assert(hdr->len_cap == 4);
 
@@ -461,7 +461,7 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 		printf("0x%02x <- BBP REG%u\t[READ]\n", cur_data, cur_addr);
 
 		state = 0;
-		break;	
+		break;
 	/* FIXME: why this does not compile ?
 	default:
 		assert(false);
@@ -591,7 +591,7 @@ void process_bulk_packet(struct usbmon_packet *shdr, struct usbmon_packet *hdr)
 				printf("%02x ", buf[i]);
 			printf("\n");
 		}
-		
+
 		print_rxinfo(buf, len);
 	} else {
 		// Write
@@ -600,13 +600,13 @@ void process_bulk_packet(struct usbmon_packet *shdr, struct usbmon_packet *hdr)
 
 		printf("BULK%d -> WRITE %d BYTES\n", ep, len);
 
-		if (0) {	
+		if (0) {
 			for (int i = 0; i < len; i++)
 				printf("%02x ", buf[i]);
 			printf("\n");
 		}
 
-		print_txinfo(buf, len);	
+		print_txinfo(buf, len);
 	}
 }
 
