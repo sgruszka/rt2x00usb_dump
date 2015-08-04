@@ -279,15 +279,110 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 	}
 }
 
+static bool process_mcu_request(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr, struct usbmon_packet *hdr)
+{
+	const uint16_t H2M_MAILBOX_CSR = 0x7010;
+	const uint32_t OWNER_BIT = 0x00000001;
+	const uint32_t HOST_CMD = 0x404;
+
+	static int state = 0;
+	static uint8_t command;
+	static uint8_t owner;
+	static uint8_t token; 
+	static uint8_t arg0;
+	static uint8_t arg1;
+
+	switch (state) {
+	case 0:
+		// Check busy or not
+		if (cr->wIndex == H2M_MAILBOX_CSR) {
+			if (is_read_cr(cr)) {
+				assert(hdr->len_cap == 4);
+			
+				uint32_t reg_val = get_reg_val(hdr);
+
+				if (!(reg_val & OWNER_BIT)) // not busy
+					state = 1;
+			} else {
+				// For some MCU command driver skip "check busy" part
+				state = 1;
+				goto state_1; 
+			}
+		} else {
+			return false;
+		}
+		break;
+	case 1:
+state_1:
+		if (cr->wIndex != H2M_MAILBOX_CSR)
+			return false;
+
+		if (is_read_cr(cr))
+			goto stop_processing;
+
+		if (hdr->len_cap == 4) {
+			uint32_t reg_val = get_reg_val(hdr);
+			arg0 = reg_val & 0x000000ff;
+			arg1 = (reg_val & 0x0000ff00) >> 8;
+			token = (reg_val & 0x00ff0000) >> 16;
+			owner = (reg_val & 0xff000000) >> 24;
+			state = 3;
+		} else {
+			// Write 16 LSB to MAILBOX_CSR
+			assert(cr->wIndex == H2M_MAILBOX_CSR);
+			arg0 = cr->wValue & 0x00ff;
+			arg1 = (cr->wValue & 0xff00) >> 8;
+			state = 2;
+		}
+		break;
+	case 2:
+		// Write 16 MSB to MAILBOX_CSR
+		if (cr->wIndex != H2M_MAILBOX_CSR + 2)
+			goto stop_processing;
+		assert(!is_read_cr(cr));
+
+		token = cr->wValue & 0x00ff;
+		owner = (cr->wValue & 0xff00) >> 8;
+		state = 3;
+		break;
+	case 3:
+		if (cr->wIndex != HOST_CMD)
+			goto stop_processing;
+		assert(!is_read_cr(cr));
+
+		if (hdr->len_cap == 4) {
+			uint32_t reg_val = get_reg_val(hdr);
+			command = reg_val & 0xff;
+			goto print;
+		} else {
+			command = cr->wValue & 0xff;
+			state = 4;
+		}
+		break;	
+	case 4:
+		if (cr->wIndex != HOST_CMD + 2)
+			goto stop_processing;
+		assert(!is_read_cr(cr));
+print:
+		printf("MCU COMMAND %02x Token %02x arg0 %02x arg1 %02x\n", command, token, arg0, arg1);
+		state = 0;
+		break;
+	}
+
+	// Packet was processed here
+	return true;
+
+stop_processing:
+	printf("Warning: fail to parse MCU command at state %d\n", state);
+	state = 0;
+	return false;
+}
+
 static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr, struct usbmon_packet *hdr)
 {
-	const uint16_t H2B_BBP_AGENT = 0x7028;
+	const uint16_t H2M_BBP_AGENT = 0x7028;
+	const uint16_t H2M_MAILBOX_CSR = 0x7010;
 	const uint32_t KICK_BIT	 = 0x00020000;
-
-	struct reg *reg = get_reg(cr->wIndex);
-	// We can write or read halves of two consecutive registers at once
-	struct reg *reg1 = get_reg(cr->wIndex - 2);
-	struct reg *reg2 = get_reg(cr->wIndex + 2);
 
 	static int state = 0;
 	static bool is_read;
@@ -296,8 +391,8 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 
 	switch (state) {
 	case 0:
-		// Check busy or not H2B_BBP_AGENT processing
-		if (is_read_cr(cr) && cr->wIndex == H2B_BBP_AGENT) {
+		// Check busy or not H2M_BBP_AGENT processing
+		if (is_read_cr(cr) && cr->wIndex == H2M_BBP_AGENT) {
 			assert(hdr->len_cap == 4);
 			
 			uint32_t reg_val = get_reg_val(hdr);
@@ -311,8 +406,9 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 		if (cr->wIndex != 0x7028)
 			return false;
 
+		if (!is_read_cr(cr))
+			break;
 		// Write 16 LSB to H2
-		assert(!is_read_cr(cr));
 		assert(cr->wIndex == 0x7028);
 		cur_addr = (cr->wValue & 0xff00) >> 8;
 		cur_data = cr->wValue & 0x00ff;
@@ -354,13 +450,12 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 
 		break;
 	case 4:
-		if (cr->wIndex != H2B_BBP_AGENT)
+		if (cr->wIndex != H2M_BBP_AGENT)
 			return false;
 			
 		assert(is_read_cr(cr));
 		assert(hdr->len_cap == 4);
 
-		uint32_t reg_val = get_reg_val(hdr);
 		cur_data = cr->wValue & 0x00ff;
 
 		printf("0x%02x <- BBP REG%u\t[READ]\n", cur_data, cur_addr);
@@ -391,7 +486,9 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 	}
 
 	// FIXME: check urb statuses
-	
+
+	if (process_mcu_request(cr, shdr, hdr))
+		; //goto out;
 	if (process_h2m_bbp(cr, shdr, hdr))
 		goto out;
 
