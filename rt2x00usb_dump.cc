@@ -462,11 +462,18 @@ step_1:
 		assert(is_read_cr(cr));
 		assert(hdr->len_cap == 4);
 
-		cur_data = cr->wValue & 0x00ff;
+		uint32_t reg_val = get_reg_val(hdr);
 
-		printf("0x%02x <- BBP REG%u\t[READ]\n", cur_data, cur_addr);
+		if (!(reg_val & KICK_BIT)) {  // not busy
+			uint8_t addr = (reg_val & 0xff00) >> 8;
+			cur_data = reg_val & 0x00ff;
 
-		state = 0;
+			printf("0x%02x <- BBP REG%u\t[READ]\n", cur_data, addr);
+
+			// we can get different register from MAILBOX, finish if we get proper on
+			if (addr == cur_addr)
+				state = 0;
+		}
 		break;
 	}
 
