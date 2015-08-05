@@ -378,10 +378,10 @@ stop_processing:
 	return false;
 }
 
-static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr, struct usbmon_packet *hdr)
+// Return: 0 not processing, 1 not processing, but in middle state (not process MCU), 2 - processing
+static int process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr, struct usbmon_packet *hdr)
 {
 	const uint16_t H2M_BBP_AGENT = 0x7028;
-	const uint16_t H2M_MAILBOX_CSR = 0x7010;
 	const uint32_t KICK_BIT	 = 0x00020000;
 
 	static int state = 0;
@@ -391,32 +391,44 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 
 	switch (state) {
 	case 0:
-		// Check busy or not H2M_BBP_AGENT processing
-		if (is_read_cr(cr) && cr->wIndex == H2M_BBP_AGENT) {
-			assert(hdr->len_cap == 4);
+		// Check busy
+		if (cr->wIndex == H2M_BBP_AGENT) {
+			if (!is_read_cr(cr))
+				goto step_1;
 
+			assert(hdr->len_cap == 4);
 			uint32_t reg_val = get_reg_val(hdr);
 
 			if (!(reg_val & KICK_BIT)) // not busy
 				state = 1;
-		} else
-			return false;
+		} else {
+			return 0;
+		}
 		break;
 	case 1:
-		if (cr->wIndex != 0x7028)
-			return false;
-
-		if (!is_read_cr(cr))
+step_1:
+		// Ignore most of MCU processing, it can be mixed with H2M_BBP_AGENT I/O
+		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
 			break;
-		// Write 16 LSB to H2
-		assert(cr->wIndex == 0x7028);
+
+		if (is_read_cr(cr))
+			break;
+
+		if (cr->wIndex != H2M_BBP_AGENT)
+			return 1;
+
+		// Write 16 LSB to H2M_BBP_AGENT
 		cur_addr = (cr->wValue & 0xff00) >> 8;
 		cur_data = cr->wValue & 0x00ff;
 		state = 2;
 		break;
 	case 2:
-		if (cr->wIndex != 0x702a)
-			return false;
+		// Ignore most of MCU processing, it can be mixed with H2M_BBP_AGENT I/O
+		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
+			break;
+
+		if (cr->wIndex != H2M_BBP_AGENT + 2)
+			return 1;
 
 		assert(!is_read_cr(cr));
 		is_read = (cr->wValue & 0x1) ? true : false;
@@ -424,34 +436,28 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 		break;
 	case 3:
 		// Ignore most of MCU processing
-#if 0
-		if (cr->wIndex == 0x7010) && is_read_cr(cr))
-			break;
-		if (cr->wIndex == 0x7010 && cr->wValue == 0x0000)
-			break;
-		if (cr->wIndex == 0x7012 && cr->wValue == 0x0000)
-			break;
-		if (cr->wIndex == 0x0404 && cr->wValue == 0x0080)
-			break;
-#endif
 		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
 			break;
 
 		// End of MCU processing
-		if (cr->wIndex == 0x0406 && cr->wValue == 0x0000) {
-			if (is_read)
+		if (cr->wIndex == 0x0406) {
+			if (is_read) {
 				state = 4;
-			else {
+			} else {
 				printf("0x%02x -> BBP REG%u\t[WRITE]\n", cur_data, cur_addr);
 				state = 0;
 			}
-		} else
-			return false;
-
+		} else {
+			return 1;
+		}
 		break;
 	case 4:
+		// Ignore most of MCU processing, it can be mixed with H2M_BBP_AGENT I/O
+		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
+			break;
+
 		if (cr->wIndex != H2M_BBP_AGENT)
-			return false;
+			return 1;
 
 		assert(is_read_cr(cr));
 		assert(hdr->len_cap == 4);
@@ -462,20 +468,16 @@ static bool process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *sh
 
 		state = 0;
 		break;
-	/* FIXME: why this does not compile ?
-	default:
-		assert(false);
-		break;
-	*/
 	}
 
 	// Packet was processed here
-	return true;
+	return 2;
 }
 
 void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hdr)
 {
 	struct usb_ctrlrequest *cr = reinterpret_cast<struct usb_ctrlrequest *>(shdr->s.setup);
+	int ret;
 
 	if (!(cr->bRequestType & 0x40)) {
 		// Not vendor request
@@ -487,9 +489,10 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 
 	// FIXME: check urb statuses
 
-	if (process_mcu_request(cr, shdr, hdr))
-		; //goto out;
-	if (process_h2m_bbp(cr, shdr, hdr))
+	ret = process_h2m_bbp(cr, shdr, hdr);
+	if (ret == 2)
+		goto out;
+	if (ret == 0 && process_mcu_request(cr, shdr, hdr))
 		goto out;
 
 	if (cr->wIndex > 0x17ff) {
