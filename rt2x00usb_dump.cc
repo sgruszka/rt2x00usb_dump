@@ -44,6 +44,12 @@
 #define USB_DIR_IN	0x80
 #define LINEBUF_LEN	16383
 
+#if 0
+#define DEBUG(x,...) printf(x, ##__VA_ARGS__)
+#else
+#define DEBUG(x,...)
+#endif
+
 /* this was taken from usbmon.txt in the kernel documentation */
 #define SETUP_LEN 8
 struct usbmon_packet {
@@ -143,20 +149,25 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 			bool busy = reg_val & KICK_BIT;
 			if (busy)
 				return;
-
 #if 0
 			assert(reg->cur_addr == ((reg_val & ADDR_MASK) >> 8));
 #else
 			if (reg->cur_addr != ((reg_val & ADDR_MASK) >> 8))
-				printf("WARN cur_addr %02x addr %02x reg_val %08x\n", reg->cur_addr, (reg_val & ADDR_MASK) >> 8, reg_val);
+				printf("WARN %d: cur_addr %02x addr %02x reg_val %08x\n", __LINE__, reg->cur_addr, (reg_val & ADDR_MASK) >> 8, reg_val);
 #endif
 			reg->cur_data = reg_val & DATA_MASK;
 
 			print_special_reg(reg, true);
 
 			reg->state = CHECKING_STATUS;
-		} else
+		} else {
+#if 0
 			assert(reg->state == CHECKING_STATUS);
+#else
+			if (reg->state != CHECKING_STATUS)
+				printf("WARN %d: reg->state (%d) != CHECKING_STATUS\n", __LINE__, reg->state);
+#endif
+		}
 	} else {
 		// Write
 		if (shdr->len_cap == 4) {
@@ -373,7 +384,7 @@ print:
 	return true;
 
 stop_processing:
-	printf("Warning: fail to parse MCU command at state %d\n", state);
+	printf("WARN %d: fail to parse MCU command at state %d\n", __LINE__, state);
 	state = 0;
 	return false;
 }
@@ -393,6 +404,7 @@ static int process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *shd
 	case 0:
 		// Check busy
 		if (cr->wIndex == H2M_BBP_AGENT) {
+			DEBUG("step 0\n");
 			if (!is_read_cr(cr))
 				goto step_1;
 
@@ -407,6 +419,7 @@ static int process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *shd
 		break;
 	case 1:
 step_1:
+		DEBUG("step 1\n");
 		// Ignore most of MCU processing, it can be mixed with H2M_BBP_AGENT I/O
 		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
 			break;
@@ -423,6 +436,7 @@ step_1:
 		state = 2;
 		break;
 	case 2:
+		DEBUG("step 2\n");
 		// Ignore most of MCU processing, it can be mixed with H2M_BBP_AGENT I/O
 		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
 			break;
@@ -435,6 +449,7 @@ step_1:
 		state = 3;
 		break;
 	case 3:
+		DEBUG("step 3\n");
 		// Ignore most of MCU processing
 		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
 			break;
@@ -452,6 +467,7 @@ step_1:
 		}
 		break;
 	case 4:
+		DEBUG("step 4\n");
 		// Ignore most of MCU processing, it can be mixed with H2M_BBP_AGENT I/O
 		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
 			break;
@@ -463,17 +479,15 @@ step_1:
 		assert(hdr->len_cap == 4);
 
 		uint32_t reg_val = get_reg_val(hdr);
+		uint8_t addr = (reg_val & 0xff00) >> 8;
+		cur_data = reg_val & 0x00ff;
 
-		if (!(reg_val & KICK_BIT)) {  // not busy
-			uint8_t addr = (reg_val & 0xff00) >> 8;
-			cur_data = reg_val & 0x00ff;
+		printf("0x%02x <- BBP REG%u\t[READ]\n", cur_data, addr);
 
-			printf("0x%02x <- BBP REG%u\t[READ]\n", cur_data, addr);
+		if (addr != cur_addr)
+			printf("WARN %d: BBP read expected addr %u get %u\n", __LINE__, cur_addr, addr);
 
-			// we can get different register from MAILBOX, finish if we get proper on
-			if (addr == cur_addr)
-				state = 0;
-		}
+		state = 0;
 		break;
 	}
 
@@ -497,10 +511,12 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 	// FIXME: check urb statuses
 
 	ret = process_h2m_bbp(cr, shdr, hdr);
+#if 0
 	if (ret == 2)
 		goto out;
 	if (ret == 0 && process_mcu_request(cr, shdr, hdr))
 		goto out;
+#endif
 
 	if (cr->wIndex > 0x17ff) {
 		// Not registers area
@@ -645,7 +661,7 @@ void process_packet(struct usbmon_packet *hdr)
 	assert(shdr->epnum == hdr->epnum);
 #else
 	if (shdr->epnum != hdr->epnum)
-		printf("WARN EP missmash shdr->epnum %02x hdr->epnum %02x\n", shdr->epnum, hdr->epnum);
+		printf("WARN %d: EP missmash shdr->epnum %02x hdr->epnum %02x\n", __LINE__, shdr->epnum, hdr->epnum);
 #endif
 	assert(shdr->xfer_type == hdr->xfer_type);
 
