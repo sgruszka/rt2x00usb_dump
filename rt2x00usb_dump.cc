@@ -45,7 +45,7 @@
 #define LINEBUF_LEN	16383
 
 #if 0
-#define DEBUG(x,...) printf(x, ##__VA_ARGS__)
+#define DEBUG(x,...) printf("%s: " x, __func__, ##__VA_ARGS__)
 #else
 #define DEBUG(x,...)
 #endif
@@ -406,7 +406,7 @@ static int process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *shd
 		if (cr->wIndex == H2M_BBP_AGENT) {
 			DEBUG("step 0\n");
 			if (!is_read_cr(cr))
-				goto step_1;
+				break;
 
 			assert(hdr->len_cap == 4);
 			uint32_t reg_val = get_reg_val(hdr);
@@ -418,7 +418,6 @@ static int process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *shd
 		}
 		break;
 	case 1:
-step_1:
 		DEBUG("step 1\n");
 		// Ignore most of MCU processing, it can be mixed with H2M_BBP_AGENT I/O
 		if (cr->wIndex == 0x7010 || cr->wIndex == 0x7012 || cr->wIndex == 0x404)
@@ -482,10 +481,10 @@ step_1:
 		uint8_t addr = (reg_val & 0xff00) >> 8;
 		cur_data = reg_val & 0x00ff;
 
-		printf("0x%02x <- BBP REG%u\t[READ]\n", cur_data, addr);
-
 		if (addr != cur_addr)
 			printf("WARN %d: BBP read expected addr %u get %u\n", __LINE__, cur_addr, addr);
+
+		printf("0x%02x <- BBP REG%u\t[READ]\n", cur_data, addr);
 
 		state = 0;
 		break;
@@ -511,12 +510,10 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 	// FIXME: check urb statuses
 
 	ret = process_h2m_bbp(cr, shdr, hdr);
-#if 0
 	if (ret == 2)
 		goto out;
 	if (ret == 0 && process_mcu_request(cr, shdr, hdr))
 		goto out;
-#endif
 
 	if (cr->wIndex > 0x17ff) {
 		// Not registers area
