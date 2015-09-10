@@ -149,24 +149,18 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 			bool busy = reg_val & KICK_BIT;
 			if (busy)
 				return;
-#if 0
-			assert(reg->cur_addr == ((reg_val & ADDR_MASK) >> 8));
-#else
+
 			if (reg->cur_addr != ((reg_val & ADDR_MASK) >> 8))
 				printf("WARN %d: cur_addr %02x addr %02x reg_val %08x\n", __LINE__, reg->cur_addr, (reg_val & ADDR_MASK) >> 8, reg_val);
-#endif
+
 			reg->cur_data = reg_val & DATA_MASK;
 
 			print_special_reg(reg, true);
 
 			reg->state = CHECKING_STATUS;
 		} else {
-#if 0
-			assert(reg->state == CHECKING_STATUS);
-#else
 			if (reg->state != CHECKING_STATUS)
 				printf("WARN %d: reg->state (%d) != CHECKING_STATUS\n", __LINE__, reg->state);
-#endif
 		}
 	} else {
 		// Write
@@ -196,14 +190,10 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 
 				reg->state = SET_ADDR_DATA;
 			} else {
-#if 0
-				assert(reg->state == SET_ADDR_DATA);
-#else
 				if (reg->state != SET_ADDR_DATA) {
 					reg->state = CHECKING_STATUS;
 					return;
 				}
-#endif
 
 				// UpperHalf (cr->wIndex == 0x101e)
 				bool do_read = cr->wValue & (RW_BIT >> 16);
