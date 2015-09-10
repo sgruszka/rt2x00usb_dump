@@ -857,9 +857,9 @@ void create_map(T arr[], int N, FILE *fp)
 		typename T::iterator it;
 		T &l = arr[i];
 
-		fprintf(fp, "%d: ", i);
+		fprintf(fp, "%d:\t", i);
 		for (it = l.begin(); it != l.end(); ++it) {
-			fprintf(fp, "%02u ", *it);
+			fprintf(fp, "%02x ", *it);
 		}
 		fprintf(fp, "\n");
 	}
