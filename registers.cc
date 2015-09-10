@@ -1001,16 +1001,19 @@ struct special_reg {
 	uint8_t cur_data;
 };
 
+#define BBP_SPECIAL_ADDR	0x101c
+#define RF_SPECIAL_ADDR		0x0500
+
 struct special_reg reg_bbp = {
 	name: "BBP",
-	addr: 0x101c,
+	addr: BBP_SPECIAL_ADDR,
 	ADDR_MASK: 0x0000ff00,
 	write_is_1: false,
 };
 
 struct special_reg reg_rf = {
 	name: "RF",
-	addr: 0x0500,
+	addr: RF_SPECIAL_ADDR,
 	ADDR_MASK: 0x00003f00,
 	write_is_1: true,
 };

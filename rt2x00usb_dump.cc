@@ -36,6 +36,7 @@
 #include <linux/types.h>
 
 #include <map>
+#include <list>
 
 #define SYSBASE		"/sys/bus/usb/devices"
 #define USBMON_DEVICE	"/dev/usbmon"
@@ -110,6 +111,34 @@ static inline bool is_read_cr(struct usb_ctrlrequest *cr)
 }
 
 #include "registers.cc"
+
+#define MAX_MAC_REG	(0x1800 / 4)
+#define MAX_RF_REG	255
+#define MAX_BBP_REG	255
+
+std::list<uint32_t> mac_regs_map[MAX_MAC_REG];
+std::list<uint8_t> rf_regs_map[MAX_RF_REG];
+std::list<uint8_t> bbp_regs_map[MAX_BBP_REG];
+
+FILE *f_mac_map;
+FILE *f_rf_map;
+FILE *f_bbp_map;
+
+static void bbp_add_to_map(uint16_t addr, uint8_t data)
+{
+	assert(addr < MAX_BBP_REG);
+
+	if (f_bbp_map)
+		bbp_regs_map[addr].push_back(data);
+}
+
+static void rf_add_to_map(uint16_t addr, uint8_t data)
+{
+	assert(addr < MAX_RF_REG);
+
+	if (f_rf_map)
+		rf_regs_map[addr].push_back(data);
+}
 
 unsigned char *get_data(struct usbmon_packet *hdr)
 {
@@ -206,6 +235,11 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 				if (do_read == false) {
 					print_special_reg(reg, false);
 					reg->state = CHECKING_STATUS;
+
+					if (reg->addr == BBP_SPECIAL_ADDR)
+						bbp_add_to_map(reg->cur_addr, reg->cur_data);
+					else if (reg->addr == RF_SPECIAL_ADDR && f_rf_map)
+						rf_add_to_map(reg->cur_addr, reg->cur_data);
 				} else
 					reg->state = KICK_READ;
 			}
@@ -450,6 +484,8 @@ static int process_h2m_bbp(struct usb_ctrlrequest *cr, struct usbmon_packet *shd
 			} else {
 				printf("0x%02x -> BBP REG%u\t[WRITE]\n", cur_data, cur_addr);
 				state = 0;
+
+				bbp_add_to_map(cur_addr, cur_data);
 			}
 		} else {
 			return 1;
@@ -793,7 +829,19 @@ int find_device(char *vidpid, int *bus, int *address)
 
 void usage(void)
 {
-	printf("usage: rt2x00_usbdump [-d <vid:pid>]\n");
+	printf("usage: rt2x00_usbdump -d <vid:pid> [-m mac_regs_file] [-b bbp_regs_file] [-r rf_regs_file]\n");
+}
+
+int open_map(FILE **fp, char *name)
+{
+	if (name == NULL)
+		return -1;
+
+	*fp = fopen(name, "w");
+	if (fp == NULL);
+		return -1;
+
+	return 0;
 }
 
 int main(int argc, char **argv)
@@ -805,7 +853,7 @@ int main(int argc, char **argv)
 
 	// FIXME: device autorecognize
 	device = NULL;
-	while ((opt = getopt(argc, argv, "d:")) != -1) {
+	while ((opt = getopt(argc, argv, "dmbr:")) != -1) {
 		switch (opt) {
 		case 'd':
 			if (strlen(optarg) != 9 || strspn(optarg, "01234567890abcdef:") != 9)
@@ -813,6 +861,21 @@ int main(int argc, char **argv)
 			else
 				device = optarg;
 			break;
+		case 'm':
+			if (open_map(&f_mac_map, optarg) != 0)
+				goto err;
+			break;
+		case 'r':
+			if (open_map(&f_rf_map, optarg) != 0)
+				goto err;
+			break;
+		case 'b':
+			if (open_map(&f_bbp_map, optarg) != 0)
+				goto err;
+			break;
+		default:
+			usage();
+			return 1;
 		}
 	}
 
@@ -824,5 +887,10 @@ int main(int argc, char **argv)
 	if (find_device(device, &bus, &address))
 		sniff(bus, address);
 	return 0;
+
+err:
+	fprintf(stderr, "fail to open file %s\n", optarg);
+	usage();
+	return 1;
 }
 
