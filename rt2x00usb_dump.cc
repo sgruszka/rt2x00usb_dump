@@ -31,6 +31,7 @@
 #include <sys/mman.h>
 #include <inttypes.h>
 #include <errno.h>
+#include <signal.h>
 #include <assert.h>
 
 #include <linux/types.h>
@@ -211,6 +212,11 @@ void process_special_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packe
 			else {
 				print_special_reg(reg, false);
 				reg->state = CHECKING_STATUS;
+
+				if (reg->addr == BBP_SPECIAL_ADDR)
+					bbp_add_to_map(reg->cur_addr, reg->cur_data);
+				else if (reg->addr == RF_SPECIAL_ADDR && f_rf_map)
+					rf_add_to_map(reg->cur_addr, reg->cur_data);
 			}
 		} else if (shdr->len_cap == 0) {
 			if (cr->wIndex == reg->addr) {
@@ -680,13 +686,10 @@ void process_packet(struct usbmon_packet *hdr)
 	struct usbmon_packet *shdr = reinterpret_cast<struct usbmon_packet *>(buf);
 
 	assert(shdr->id == hdr->id);
-#if 0
-	assert(shdr->epnum == hdr->epnum);
-#else
+	assert(shdr->xfer_type == hdr->xfer_type);
+
 	if (shdr->epnum != hdr->epnum)
 		printf("WARN %d: EP missmash shdr->epnum %02x hdr->epnum %02x\n", __LINE__, shdr->epnum, hdr->epnum);
-#endif
-	assert(shdr->xfer_type == hdr->xfer_type);
 
 	if (shdr->xfer_type == 2)
 		process_control_packet(shdr, hdr);
@@ -838,28 +841,62 @@ int open_map(FILE **fp, char *name)
 		return -1;
 
 	*fp = fopen(name, "w");
-	if (fp == NULL);
+	if (*fp == NULL)
 		return -1;
 
 	return 0;
 }
 
+template <typename T>
+void create_map(T arr[], int N, FILE *fp)
+{
+	if (!fp)
+		return;
+
+	for (int i = 0; i < N; i++) {
+		typename T::iterator it;
+		T &l = arr[i];
+
+		fprintf(fp, "%d: ", i);
+		for (it = l.begin(); it != l.end(); ++it) {
+			fprintf(fp, "%02u ", *it);
+		}
+		fprintf(fp, "\n");
+	}
+
+	fflush(fp);
+	fclose(fp);
+}
+
+void term(int sig)
+{
+	create_map(mac_regs_map, MAX_MAC_REG, f_mac_map);
+	create_map(rf_regs_map, MAX_RF_REG, f_rf_map);
+	create_map(bbp_regs_map, MAX_BBP_REG,f_bbp_map);
+
+	fflush(stdout);
+	exit(0);
+}
+
 int main(int argc, char **argv)
 {
 	int opt, bus, address;
-	char *device;
+	char device[16];
 
 	regs_array_self_test();
 
 	// FIXME: device autorecognize
-	device = NULL;
-	while ((opt = getopt(argc, argv, "dmbr:")) != -1) {
+	while ((opt = getopt(argc, argv, "d:m:b:r:")) != -1) {
 		switch (opt) {
 		case 'd':
-			if (strlen(optarg) != 9 || strspn(optarg, "01234567890abcdef:") != 9)
+			if (optarg == NULL || strlen(optarg) != 9 || strspn(optarg, "01234567890abcdef:") != 9) {
 				printf("invalid format for device id (aaaa:bbbb)\n");
-			else
-				device = optarg;
+				usage();
+				return 1;
+			} else {
+				strncpy(device, optarg, 16);
+				device[15] = '\0';
+			}
 			break;
 		case 'm':
 			if (open_map(&f_mac_map, optarg) != 0)
@@ -879,10 +916,8 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (!device) {
-		usage();
-		return 1;
-	}
+	signal(SIGINT, term);
+	signal(SIGTERM, term);
 
 	if (find_device(device, &bus, &address))
 		sniff(bus, address);
