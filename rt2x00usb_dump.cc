@@ -111,19 +111,39 @@ static inline bool is_read_cr(struct usb_ctrlrequest *cr)
 	return (cr->bRequestType & 0x80);
 }
 
+static unsigned char *get_data(struct usbmon_packet *hdr)
+{
+	return reinterpret_cast<unsigned char *>(hdr) + sizeof(struct usbmon_packet);
+}
+
 #include "registers.cc"
 
-#define MAX_MAC_REG	(0x1800 / 4)
+#define MAX_MAC_REG	(0x8000 / 2)
 #define MAX_RF_REG	255
 #define MAX_BBP_REG	255
 
-std::list<uint32_t> mac_regs_map[MAX_MAC_REG];
+std::list<uint16_t> mac_regs_map[MAX_MAC_REG];
 std::list<uint8_t> rf_regs_map[MAX_RF_REG];
 std::list<uint8_t> bbp_regs_map[MAX_BBP_REG];
 
 FILE *f_mac_map;
 FILE *f_rf_map;
 FILE *f_bbp_map;
+
+static void mac_add_to_map(uint16_t addr, uint32_t data)
+{
+	assert(addr/2 < MAX_MAC_REG);
+
+	if (f_mac_map)
+		mac_regs_map[addr/2].push_back(data);
+}
+
+static void mac_add_data_to_map(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr)
+{
+	unsigned char *data = get_data(shdr);
+	for (unsigned int i = 0; i < shdr->len_cap/2; i++)
+		mac_add_to_map(cr->wIndex + 2*i , data[i] | (((unsigned short)data[i + 1]) << 8));
+}
 
 static void bbp_add_to_map(uint16_t addr, uint8_t data)
 {
@@ -139,11 +159,6 @@ static void rf_add_to_map(uint16_t addr, uint8_t data)
 
 	if (f_rf_map)
 		rf_regs_map[addr].push_back(data);
-}
-
-unsigned char *get_data(struct usbmon_packet *hdr)
-{
-	return reinterpret_cast<unsigned char *>(hdr) + sizeof(struct usbmon_packet);
 }
 
 void print_data(struct usbmon_packet *hdr)
@@ -291,16 +306,23 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 		if (shdr->len_cap != 4 && shdr->len_cap != 0) {
 			printf("CTRL: WRITE %d BYTES TO REGISTER 0x%04x\n", shdr->len_cap, cr->wIndex);
 			print_data(shdr);
+			mac_add_data_to_map(cr, shdr);
 			return;
 		}
 
 		if (shdr->len_cap == 4) {
 			uint32_t reg_val = get_reg_val(shdr);
 
-			if (reg)
+			if (!reg1 || !reg2) {
+				mac_add_to_map(cr->wIndex, reg_val & 0xffff);	// LowerHalf
+				mac_add_to_map(cr->wIndex + 2, reg_val >> 16);	// UpperHalf 
+			}
+
+			if (reg) {
 				print_reg(reg, reg_val, false, Full);
-			else {
+			} else {
 				if (reg1 && reg2) {
+					// Special case - write to two different but consecutive registers
 					print_reg(reg1, reg_val & 0xffff, false, UpperHalf);
 					print_reg(reg2, reg_val >> 16, false, LowerHalf);
 				} else {
@@ -309,6 +331,8 @@ void process_register_rw(struct usb_ctrlrequest *cr, struct usbmon_packet *shdr,
 				}
 			}
 		} else if (shdr->len_cap == 0) {
+			mac_add_to_map(cr->wIndex, cr->wValue); // Lower or Upper Half
+
 			// Using wValue as data
 			if (reg)
 				print_reg(reg, cr->wValue, false, LowerHalf);
@@ -561,9 +585,11 @@ void process_control_packet(struct usbmon_packet *shdr, struct usbmon_packet *hd
 			if (shdr->len_cap == 0) {
 				assert(cr->wLength == 0);
 				printf("CTRL: WRITE VALUE 0x%04x TO 0x%04x (%s)\n", cr->wValue, cr->wIndex, name);
+				mac_add_to_map(cr->wIndex , cr->wValue);
 			} else {
 				printf("CTRL: WRITE %d BYTES TO 0x%04x (%s)\n", shdr->len_cap, cr->wIndex, name);
 				print_data(shdr);
+				mac_add_data_to_map(cr, shdr);
 			}
 		}
 
@@ -847,6 +873,45 @@ int open_map(FILE **fp, char *name)
 	return 0;
 }
 
+/* Print only last REG_PRINT_LIMIT registers */
+#define REG_PRINT_LIMIT 5
+
+void create_mac_map(std::list<uint16_t> mac_regs_map[], FILE *fp)
+{
+	 if (!fp)
+		return;
+
+	for (int i = 0; i < MAX_MAC_REG; i++) {
+		std::list<uint16_t> &l = mac_regs_map[i];
+		std::list<uint16_t>::iterator it;
+
+		const uint16_t addr = i*2;
+		struct reg *reg;
+		bool lower_half;
+
+		if (i & 1) {
+			lower_half = false;
+			reg = get_reg(addr - 2);
+		} else {
+			lower_half = true;
+			reg = get_reg(addr);
+		}
+	
+		const char *name = reg ? reg->name : "UNKNOWN";
+		const char *half = lower_half ? "L" : "U";
+
+		fprintf(fp, "%04x %s %s ", addr, name, half);
+		int k;
+		for (k = l.size(), it = l.begin(); it != l.end(); ++it, k--)
+			if (k <= REG_PRINT_LIMIT)
+				fprintf(fp, " %04x", *it);
+		fprintf(fp, "\n");
+	}
+
+	fflush(fp);
+	fclose(fp);
+}
+
 template <typename T>
 void create_map(T arr[], int N, FILE *fp)
 {
@@ -858,9 +923,27 @@ void create_map(T arr[], int N, FILE *fp)
 		T &l = arr[i];
 
 		fprintf(fp, "%d:\t", i);
+#if 0
+		int last_value = -1;
+		int repeats = 0;
 		for (it = l.begin(); it != l.end(); ++it) {
-			fprintf(fp, "%02x ", *it);
+			if (last_value == static_cast<int>(*it)) {
+				repeats++;
+			} else {
+				if (repeats > 0)
+					fprintf(fp, "(%d)", repeats);
+				fprintf(fp, " %02x", *it);
+				last_value = *it;
+				repeats = 0;
+			}
 		}
+#else
+		int k;
+		for (k = l.size(), it = l.begin(); it != l.end(); ++it, k--)
+			if (k <= REG_PRINT_LIMIT)
+				fprintf(fp, " %02x", *it);
+	
+#endif
 		fprintf(fp, "\n");
 	}
 
@@ -870,7 +953,7 @@ void create_map(T arr[], int N, FILE *fp)
 
 void term(int sig)
 {
-	create_map(mac_regs_map, MAX_MAC_REG, f_mac_map);
+	create_mac_map(mac_regs_map, f_mac_map);
 	create_map(rf_regs_map, MAX_RF_REG, f_rf_map);
 	create_map(bbp_regs_map, MAX_BBP_REG,f_bbp_map);
 
